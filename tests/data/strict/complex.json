@@ -1,0 +1,22 @@
+{
+  "first": "string",
+  "second": true,
+  "third": false, "fourth": null,
+  "fifth": {
+    "nested_str": "ii",
+    "nested_int": 1234, "nested_float1": 12.34,
+    "nested_float2": -1234e-2,
+    "nested_float3": 123.4e5,
+    "nested_array": [
+      "adfda",
+      "fdsa",
+      1.2,
+      3,5, 321
+    ],
+    "nested_object": {
+      "key1": "aa", "key2": 555,
+      "key3": -1.2
+    }
+  },
+  "escaped": "A\tB\nC\rD\"E\bF'G"
+}

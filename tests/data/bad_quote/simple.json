@@ -1,0 +1,8 @@
+{
+  "str": "string",
+  'int': 1234567890,
+  "float1": 1234.56789,
+  "float2": -1234e-4,
+  "escaped": "A\tB\nC\rD\"E\bFG"
+}
+

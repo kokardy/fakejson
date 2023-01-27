@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fakejson"
+version = "0.9.0"
+authors = [
+  { name="kokardy", email="mgc1028@gmail.com" },
+]
+description = "json-like format(allowing single-quote string) parser"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/kokardy/fakejson"
+"Bug Tracker" = "https://github.com/kokardy/fakejson/issues"
+
+[tool.pytest.ini_options]
+testpaths=["tests"]
+addopts = "--log-cli-level=DEBUG"
+
+[tool.flake8]
+max-line-length = 120
+
+[[tool.mypy.overrides]]
+module = ".*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "fakejson.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "setuptools"
+ignore_missing_imports = true
