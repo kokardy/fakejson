@@ -73,8 +73,8 @@ class JSONParser:
         result = self.parse_something()
 
         try:
-            _ = self.skip_spaces()
-            raise ParseError("unexpected characters exists in later")
+            char = self.skip_spaces()
+            raise ParseError(f"unexpected character '{char}' exists in later")
         except DocumentEnd:
             debug(Event.DocumentEnd, f"{result=}")
             return result
@@ -200,11 +200,9 @@ class JSONParser:
             first_char: first character
 
         """
-        # TODO number
-
         debug(Event.LiteralStart)
 
-        result: bool | None
+        result: bool | None | int | float
         if first_char == "t":
             result = self.parse_true()
         elif first_char == "f":
@@ -223,12 +221,15 @@ class JSONParser:
         """parse number literal"""
         buf = StringIO()
         while True:
-            char = self.next_char()
-            if char in "-0123456789e.":
-                buf.write(char)
-            else:
-                self.pos -= 1
-                self.buf.seek(self.pos)
+            try:
+                char = self.next_char()
+                if char in "-0123456789e.":
+                    buf.write(char)
+                else:
+                    self.pos -= 1
+                    self.buf.seek(self.pos)
+                    break
+            except DocumentEnd:
                 break
 
         result_str = buf.getvalue()
