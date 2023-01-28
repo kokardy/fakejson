@@ -44,6 +44,8 @@ class Event(Enum):
     ArrayEnd = event_seq()
     LiteralStart = event_seq()
     LiteralEnd = event_seq()
+    DetectValueSeparator = event_seq()
+    DetectKeyValueSeparator = event_seq()
 
 
 spaces = set([" ", "\t", "\n", "\r"])
@@ -62,10 +64,21 @@ class JSONParser:
     pos: int
     nest: int
 
-    def __init__(self, buf: TextIO):
+    def __init__(self, buf: TextIO, *, backward_display=10, forward_display=3):
         self.buf = buf
+        self.backward_display = backward_display
+        self.forward_display = forward_display
         self.pos = 0
         self.nest = 0
+
+    def get_current_source(self, _start: int) -> str:
+        _start = max(0, _start - self.backward_display)
+        _end = self.pos + self.forward_display
+        length = _end - _start
+        self.buf.seek(_start)
+        source = self.buf.read(length)
+        debug(f"{_start} {_end} {length}")
+        return source
 
     def parse(self) -> JSONObject:
         debug(Event.DocumentStart)
@@ -73,8 +86,10 @@ class JSONParser:
         result = self.parse_something()
 
         try:
+            _start = self.pos
             char = self.skip_spaces()
-            raise ParseError(f"unexpected character '{char}' exists in later")
+            source = self.get_current_source(_start)
+            raise ParseError(f"unexpected character '{char}' exists in later: {source}")
         except DocumentEnd:
             debug(Event.DocumentEnd, f"{result=}")
             return result
@@ -103,9 +118,11 @@ class JSONParser:
 
     def parse_object(self) -> dict[str, JSONObject]:
         """parse json object {sothimeng}"""
+        _start = self.pos
         result: dict[str, Any] = dict()
         _ = self.next_char()  # {
         debug(Event.ObjectStart)
+
         try:
             while True:
                 next_char = self.skip_spaces()
@@ -114,7 +131,7 @@ class JSONParser:
                 logging.debug(f"{key=}")
                 collon_expected = self.skip_spaces()
                 if collon_expected == ":":
-                    logging.debug("find colon")
+                    logging.debug(Event.DetectKeyValueSeparator)
                     self.next_char()
                 else:
                     raise ParseError("Collon expected")
@@ -123,26 +140,33 @@ class JSONParser:
                 logging.debug(f"{value=}")
 
                 if key in result:
-                    raise ParseError(f"same key registered: {key}")
+                    source = self.get_current_source(_start)
+                    raise ParseError(f"same key registered '{key}': {source}")
 
                 result[key] = value
 
                 next_char = self.skip_spaces()
                 if next_char == ",":
+                    logging.debug(Event.DetectValueSeparator)
                     self.next_char()
                     continue
                 elif next_char == "}":
                     self.next_char()
-                    break
+                    debug(Event.ObjectEnd, f"{result=}")
+                    return result
+                else:
+                    source = self.get_current_source(_start)
+                    raise ParseError(f"unexpected char '{next_char}': {source}")
 
-                raise ParseError("parse error")
-            debug(Event.ObjectEnd, f"{result=}")
-            return result
         except DocumentEnd:
-            raise ParseError("Document ends unless closing array")
+            source = self.get_current_source(_start)
+            raise ParseError(f"Document ends until object ends: {source}")
+        except Exception as e:
+            raise e
 
     def parse_array(self) -> list[JSONObject]:
         """parse json array"""
+        _start = self.pos
         debug(Event.ArrayStart)
         result: list[JSONObject] = list()
         _ = self.next_char()  # [
@@ -158,40 +182,48 @@ class JSONParser:
                     self.next_char()
                     break
 
-                raise ParseError("parse error")
+                source = self.get_current_source(_start)
+                raise ParseError(f"Unexpected character {first_char}: {source}")
 
             debug(Event.ArrayEnd, f"{result=}")
             return result
         except DocumentEnd:
-            raise ParseError("Document ends unless closing array")
+            source = self.get_current_source(_start)
+            raise ParseError(f"Document ends unless closing array: {source}")
 
     def parse_string(self) -> str:
         """parse json string"""
+        _start = self.pos
         debug(Event.StringStart)
         buf = StringIO()
         escaping = False
         quote = self.next_char()
-        while char := self.next_char():
-            # string end
-            if not escaping and char == quote:
-                break
+        try:
+            while char := self.next_char():
+                # string end
+                if not escaping and char == quote:
+                    break
 
-            buf.write(char)
+                buf.write(char)
 
-            # escape
-            if not escaping and char == "\\":
-                escaping = True
-            else:
-                escaping = False
-        result = buf.getvalue()
-        result = result.replace("\\t", "\t")
-        result = result.replace("\\n", "\n")
-        result = result.replace("\\r", "\r")
-        result = result.replace("\\b", "\b")
-        result = result.replace('\\"', '"')
-        result = result.replace("\\'", "'")
-        debug(Event.StringEnd, f"{result=}")
-        return result
+                # escape
+                if not escaping and char == "\\":
+                    escaping = True
+                else:
+                    escaping = False
+            result = buf.getvalue()
+            result = result.replace("\\t", "\t")
+            result = result.replace("\\n", "\n")
+            result = result.replace("\\r", "\r")
+            result = result.replace("\\b", "\b")
+            result = result.replace('\\"', '"')
+            result = result.replace("\\'", "'")
+            debug(Event.StringEnd, f"{result=}")
+            return result
+
+        except DocumentEnd:
+            source = self.get_current_source(_start)
+            raise ParseError(f"Document ends unless closing string: {source}")
 
     def parse_literal(self, first_char: str) -> bool | None | int | float:
         """parse json literal
@@ -219,6 +251,7 @@ class JSONParser:
 
     def parse_number(self) -> int | float:
         """parse number literal"""
+        _start = self.pos
         buf = StringIO()
         while True:
             try:
@@ -232,16 +265,21 @@ class JSONParser:
             except DocumentEnd:
                 break
 
-        result_str = buf.getvalue()
-        if "." in result_str or "e" in result_str:
-            result = float(result_str)
-        else:
-            result = int(result_str)
+        try:
+            result_str = buf.getvalue()
+            if "." in result_str or "e" in result_str:
+                result = float(result_str)
+            else:
+                result = int(result_str)
 
-        return result
+            return result
+        except ValueError:
+            source = self.get_current_source(_start)
+            raise ParseError(f"failed parsing literal[number?]: {source}")
 
     def parse_null(self) -> None:
         """parse null literal"""
+        _start = self.pos
         buf = StringIO()
         for _ in range(4):
             char = self.next_char()
@@ -250,10 +288,12 @@ class JSONParser:
         if buf.getvalue() == literal_null:
             return None
         else:
-            raise ParseError("Literal parse error")
+            source = self.get_current_source(_start)
+            raise ParseError(f"failed parsing literal[null?]: {source}")
 
     def parse_true(self) -> Literal[True]:
         """parse true literal"""
+        _start = self.pos
         buf = StringIO()
         for _ in range(4):
             char = self.next_char()
@@ -262,10 +302,12 @@ class JSONParser:
         if buf.getvalue() == literal_true:
             return True
         else:
-            raise ParseError("Literal parse error")
+            source = self.get_current_source(_start)
+            raise ParseError(f"failed parsing literal[true?]: {source}")
 
     def parse_false(self) -> Literal[False]:
         """parse false literal"""
+        _start = self.pos
         buf = StringIO()
         for _ in range(5):
             char = self.next_char()
@@ -274,7 +316,8 @@ class JSONParser:
         if buf.getvalue() == literal_false:
             return False
         else:
-            raise ParseError("Literal parse error")
+            source = self.get_current_source(_start)
+            raise ParseError(f"failed parsing literal[false?]: {source}")
 
     def skip_spaces(self) -> str:
         char = ""
@@ -294,4 +337,4 @@ class JSONParser:
             self.pos += 1
             return char
 
-        raise DocumentEnd("END")
+        raise DocumentEnd("Document ends.")
