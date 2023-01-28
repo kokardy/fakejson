@@ -2,7 +2,20 @@
 
 JSON-like format parser in Python
 
+## Supported formats
+- JSON format
+
+    Use either json.loads or json.load from the standard library to parse JSON data.
+
+- JSON-like format: available single quote as string literal and object key
+
+    If you want to parse a JSON-like string that does not contain the values null, true, or false, it is recommended to use the ast.literal_eval() function.
+
 ## Usage
+
+```sh
+pip install fekejson
+```
 
 ```python
 
