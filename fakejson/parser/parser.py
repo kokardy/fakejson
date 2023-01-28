@@ -62,9 +62,15 @@ class JSONParser:
 
     buf: TextIO
     pos: int
-    nest: int
+    nest: int  # TODO: display event nest
 
-    def __init__(self, buf: TextIO, *, backward_display=10, forward_display=3):
+    def __init__(
+        self,
+        buf: TextIO,
+        *,
+        backward_display: int = 10,
+        forward_display: int = 3,
+    ):
         self.buf = buf
         self.backward_display = backward_display
         self.forward_display = forward_display
